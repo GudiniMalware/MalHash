@@ -36,14 +36,16 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+      - name: Verify tag and archive command
+        run: |
+          python scripts/release_assets.py verify-tag
+          python scripts/release_assets.py package --help
       - name: Install Linux Qt dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxcb-cursor0
       - run: python -m pip install '.[all,build]' 'PySide6-Essentials==6.11.3'
-      - name: Verify tag
-        run: python scripts/release_assets.py verify-tag
       - name: Prepare the Windows x64 installer compiler
         if: runner.os == 'Windows'
         shell: pwsh
@@ -63,7 +65,7 @@ jobs:
       - name: Stage native release archives and Qt source metadata
         shell: bash
         run: |
-          python scripts/release_assets.py package dist transfer/archives
+          python scripts/release_assets.py package dist transfer/archives --target "${{ matrix.target }}"
           cp dist/*.qt-sources.json transfer/
       - uses: actions/upload-artifact@v6
         with:
@@ -81,12 +83,12 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - run: python -m pip install '.[build]'
       - run: python scripts/release_assets.py verify-tag
+      - run: python -m pip install '.[build]'
       - run: python -m build
       - run: python -m twine check --strict dist/*
       - name: Stage the source archive and zipped wheel
-        run: python scripts/release_assets.py package dist transfer/archives
+        run: python scripts/release_assets.py package dist transfer/archives --target python
       - uses: actions/upload-artifact@v6
         with:
           name: release-python
@@ -113,6 +115,10 @@ jobs:
           path: collected
       - name: Collect exact Qt source and archive SHA-256 checksums
         run: python scripts/release_assets.py checksums collected/archives --archive --download-qt-source --qt-manifests collected
+      - name: Verify archive checksums
+        shell: bash
+        working-directory: collected/archives
+        run: unzip -p SHA256SUMS.zip SHA256SUMS | sha256sum --strict --check -
       - name: Create or update draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -122,9 +128,13 @@ jobs:
         run: |
           shopt -s nullglob
           assets=(*.zip *.tar.gz *.tar.xz)
-          wheels=("malhash-${RELEASE_TAG#v}-"*.whl.zip)
+          stem="malhash-${RELEASE_TAG#v}"
+          wheels=("$stem-"*.whl.zip)
           (( ${#wheels[@]} > 0 )) || { echo "Missing Python wheel archive"; exit 1; }
-          for required in MalHash-Windows-x64-{Portable,Setup}.zip "${wheels[@]}" SHA256SUMS.zip; do
+          required_archives=("$stem-windows-x64.zip" "$stem"-linux-{x64,arm64}.tar.gz
+            "$stem"-macos-{x64,arm64}.zip MalHash-Windows-x64-{Portable,Setup}.zip
+            "$stem.tar.gz" "${wheels[@]}" SHA256SUMS.zip)
+          for required in "${required_archives[@]}"; do
             [[ -s "$required" ]] || { echo "Missing release archive: $required"; exit 1; }
           done
           if release=$(gh release view "$RELEASE_TAG" --json isDraft,assets); then

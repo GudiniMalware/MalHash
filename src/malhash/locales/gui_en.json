@@ -1,6 +1,7 @@
 {
   "gui.tagline": "Cross-platform hashing toolkit for malware analysts and DFIR professionals.",
   "gui.settings": "Settings",
+  "gui.licenses": "Licenses (Qt / LGPL)",
   "gui.sources": "Inputs",
   "gui.add_files": "Add files",
   "gui.add_folders": "Add folders",

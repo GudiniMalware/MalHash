@@ -62,5 +62,6 @@ jobs:
       - name: Test optional algorithms and GUI
         run: |
           python -m pip install '.[all]'
+          python -c "import blake3, pefile, tlsh; tlsh.Tlsh()"
           python -m pytest --basetemp .pytest-tmp
           python -m malhash.gui --smoke-test

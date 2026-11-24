@@ -1,4 +1,4 @@
-"""Build and smoke-test portable MalHash applications for the current host."""
+"""Build and smoke-test native MalHash applications for the current host."""
 
 import argparse
 import hashlib
@@ -22,25 +22,43 @@ OS_NAMES = {"Windows": "windows", "Linux": "linux", "Darwin": "macos"}
 ARCH_NAMES = {"amd64": "x64", "x86_64": "x64", "aarch64": "arm64", "arm64": "arm64"}
 
 
-def build(component: str, target: str, system: str, output: Path) -> Path:
-    gui = component == "gui"
-    mac_app = gui and system == "macos"
-    name = f"{'MalHash' if mac_app else 'malhash-gui' if gui else 'malhash'}-{target}"
+def run_pyinstaller(arguments: list[str], output: Path, component: str) -> None:
     command = [
         sys.executable,
         "-m",
         "PyInstaller",
         "--clean",
         "--noconfirm",
-        "--noupx",
-        "--name",
-        name,
         "--distpath",
         str(output),
         "--workpath",
-        str(ROOT / "build" / "pyinstaller" / "work"),
+        str(ROOT / "build" / "pyinstaller" / component / "work"),
+        *arguments,
+    ]
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+    if sys.platform == "win32":
+        windows = Path(os.environ["SystemRoot"])
+        # Resolve native dependencies against Windows and the build environment.
+        directories = (windows / "System32", windows, Path(sys.executable).parent)
+        environment["PATH"] = os.pathsep.join(map(str, directories))
+    subprocess.run(command, check=True, cwd=ROOT, env=environment)
+
+
+def build(component: str, target: str, system: str, output: Path) -> Path:
+    gui = component == "gui"
+    mac_app = gui and system == "macos"
+    name = f"{'MalHash' if mac_app else 'malhash-gui' if gui else 'malhash'}-{target}"
+    if system == "macos":
+        # The GUI's intermediate COLLECT directory case-folds to the CLI filename.
+        output = output / component
+    arguments = [
+        "--noupx",
+        "--name",
+        name,
         "--specpath",
-        str(ROOT / "build" / "pyinstaller" / "spec"),
+        str(ROOT / "build" / "pyinstaller" / component / "spec"),
         "--paths",
         str(ROOT / "src"),
         "--collect-data",
@@ -49,42 +67,28 @@ def build(component: str, target: str, system: str, output: Path) -> Path:
         "ssdeep",
     ]
     for module in ("ppdeep", "blake3", "pefile", "tlsh"):
-        command += ["--hidden-import", module]
+        arguments += ["--hidden-import", module]
     if gui:
-        command += ["--onedir", "--windowed"]
-        if system == "windows":
-            command += ["--icon", str(ASSETS / "malhash.ico")]
-        elif mac_app:
-            command += ["--icon", str(ASSETS / "malhash.icns")]
-            command += ["--osx-bundle-identifier", "org.malhash.app"]
+        arguments += ["--onedir", "--windowed"]
+        if mac_app:
+            arguments += ["--icon", str(ASSETS / "malhash.icns")]
+            arguments += ["--osx-bundle-identifier", "org.malhash.app"]
     else:
-        command += ["--onefile", "--console", "--exclude-module", "malhash.gui"]
+        arguments += ["--onefile", "--console", "--exclude-module", "malhash.gui"]
         for module in ("PySide6", "shiboken6", "tkinter"):
-            command += ["--exclude-module", module]
-    command.append(str(ROOT / "scripts" / f"{component}_entry.py"))
-    environment = os.environ.copy()
-    environment.pop("PYTHONPATH", None)
-    environment.pop("PYTHONHOME", None)
-    if system == "windows":
-        windows = Path(os.environ["SystemRoot"])
-        # Resolve native dependencies against Windows and the build environment.
-        directories = (windows / "System32", windows, Path(sys.executable).parent)
-        environment["PATH"] = os.pathsep.join(map(str, directories))
-    subprocess.run(command, check=True, cwd=ROOT, env=environment)
+            arguments += ["--exclude-module", module]
+    arguments.append(str(ROOT / "scripts" / f"{component}_entry.py"))
+    run_pyinstaller(arguments, output, component)
 
     suffix = ".exe" if system == "windows" else ""
     if mac_app:
         return output / f"{name}.app" / "Contents" / "MacOS" / name
     if gui:
-        if system == "windows":
-            # Qt links against the ICU ABI provided by Windows 10/11.
-            for library in ("icu.dll", "icuin.dll", "icuuc.dll"):
-                (output / name / "_internal" / library).unlink(missing_ok=True)
         return output / name / f"{name}{suffix}"
     return output / f"{name}{suffix}"
 
 
-def smoke_test(executable: Path, component: str) -> None:
+def smoke_test(executable: Path, component: str, *, single_file: bool = False) -> None:
     workspace = ROOT / "build"
     workspace.mkdir(exist_ok=True)
     with TemporaryDirectory(prefix="malhash-smoke-", dir=workspace) as temporary:
@@ -92,7 +96,18 @@ def smoke_test(executable: Path, component: str) -> None:
         env = os.environ.copy()
         env.pop("PYTHONPATH", None)
         env.pop("PYTHONHOME", None)
+        if sys.platform == "win32":
+            windows = Path(os.environ["SystemRoot"])
+            env["PATH"] = os.pathsep.join(map(str, (windows / "System32", windows)))
+            env.pop("QT_PLUGIN_PATH", None)
+            env.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)
+        if single_file:
+            download = sandbox / "MalHash download"
+            download.mkdir()
+            executable = Path(shutil.copy2(executable, download))
         env.update(QT_QPA_PLATFORM="offscreen", MALHASH_SMOKE_SETTINGS_DIR=str(sandbox))
+        if sys.platform == "win32" and component == "gui":
+            env["QT_QPA_PLATFORM"] = "windows"
         command = [str(executable)]
         if component == "gui":
             try:
@@ -186,11 +201,9 @@ def qt_source_urls() -> list[str]:
 
 
 def runtime_packages() -> tuple[str, ...]:
-    tls_dependencies = (
-        ("tlsh-python", "nanobind")
-        if platform.machine().lower() in {"x86_64", "amd64"}
-        else ("py-tlsh",)
-    )
+    # The x64 binding's cp312-abi3 wheels contain CPython 3.12-specific extensions.
+    use_wheel = sys.version_info < (3, 13) and platform.machine().lower() in {"x86_64", "amd64"}
+    tls_dependencies = ("tlsh-python", "nanobind") if use_wheel else ("py-tlsh",)
     return (*RUNTIME_DEPENDENCIES, *tls_dependencies)
 
 
@@ -233,6 +246,79 @@ def add_licenses(destination: Path, gui: bool, qt_sources: list[str]) -> None:
     )
     notes.extend(f"- {source}" for source in qt_sources)
     (destination / "BUILD_VERSIONS.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
+
+
+def inno_compiler() -> Path:
+    configured = os.environ.get("ISCC") or shutil.which("ISCC.exe")
+    if configured:
+        return Path(configured)
+    for location in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        if location not in os.environ:
+            continue
+        base = Path(os.environ[location])
+        if location == "LOCALAPPDATA":
+            base /= "Programs"
+        for folder in ("Inno Setup 7", "Inno Setup 6"):
+            candidate = base / folder / "ISCC.exe"
+            if candidate.is_file():
+                return candidate
+    raise SystemExit("Windows GUI builds require Inno Setup 6.3+ or 7. Set ISCC to ISCC.exe.")
+
+
+def smoke_installer(setup: Path) -> None:
+    with TemporaryDirectory(prefix="installer-", dir=ROOT / "build") as temporary:
+        target = Path(temporary).resolve() / "MalHash Desktop"
+        quiet = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
+        subprocess.run(
+            [
+                str(setup),
+                *quiet,
+                "/MALHASHBUILDTEST=1",
+                "/NOICONS",
+                "/NOCLOSEAPPLICATIONS",
+                f"/DIR={target}",
+            ],
+            check=True,
+            timeout=120,
+        )
+        uninstaller = target / "unins000.exe"
+        try:
+            smoke_test(target / "MalHash.exe", "gui")
+        finally:
+            subprocess.run([str(uninstaller), *quiet], check=True, timeout=120)
+        if (target / "MalHash.exe").exists() or (target / "_internal").exists():
+            raise RuntimeError("The Windows uninstaller left application files behind")
+
+
+def build_windows_gui(output: Path, version: str, *, smoke: bool) -> Path:
+    compiler = inno_compiler()
+    with TemporaryDirectory(prefix="notices-", dir=output) as temporary:
+        add_licenses(Path(temporary), True, qt_source_urls())
+        run_pyinstaller(
+            [str(ROOT / "scripts" / "windows_gui.spec"), "--", temporary], output, "gui"
+        )
+    folder = output / "malhash-gui-windows-x64"
+    portable = output / "MalHash.exe"
+    setup = output / "MalHash-Setup.exe"
+    subprocess.run(
+        [
+            str(compiler),
+            "/Q",
+            f"/O{output}",
+            f"/DAppVersion={version}",
+            f"/DGuiDir={folder}",
+            str(ROOT / "scripts" / "windows_setup.iss"),
+        ],
+        check=True,
+        cwd=ROOT,
+    )
+    if smoke:
+        smoke_test(portable, "gui", single_file=True)
+        smoke_installer(setup)
+    for artifact in (portable, setup):
+        artifact.replace(DIST / artifact.name)
+        print(DIST / artifact.name, flush=True)
+    return folder / "malhash-gui-windows-x64.exe"
 
 
 def archive(
@@ -292,9 +378,13 @@ def main() -> int:
     components = ("cli", "gui") if args.components == "both" else (args.components,)
     executables = {}
     for component in components:
-        executable = build(component, target, system, output)
+        if system == "windows" and component == "gui":
+            executable = build_windows_gui(output, version, smoke=not args.skip_smoke)
+        else:
+            executable = build(component, target, system, output)
         executables[component] = executable
-        if not args.skip_smoke:
+    if not args.skip_smoke:
+        for component, executable in executables.items():
             smoke_test(executable, component)
     print(archive(executables, output, target, system, version))
     return 0

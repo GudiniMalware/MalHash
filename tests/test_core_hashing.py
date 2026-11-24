@@ -80,7 +80,7 @@ def test_streaming_hashes_and_metadata(tmp_path: Path) -> None:
     sample.write_bytes(data)
     algorithms = ("sha512", "sha3-256", "sha3-512", "blake2b", "blake2s", "crc32")
     result = hash_file(sample, algorithms=algorithms, metadata=METADATA_FIELDS)
-    assert result.status == "ok"
+    assert result.status == "ok", result.issue
     for name in algorithms[:-1]:
         assert result.hashes[name].value == hashlib.new(name, data).hexdigest()
     assert result.hashes["crc32"].value == f"{zlib.crc32(data):08x}"
@@ -121,7 +121,7 @@ def test_sparse_large_file_uses_bounded_reads(tmp_path: Path, monkeypatch) -> No
 
     monkeypatch.setattr(engine._Accumulator, "update", record)
     result = hash_file(path, algorithms=("sha256", "sha512"), metadata=("size",))
-    assert result.status == "ok"
+    assert result.status == "ok", result.issue
     assert result.metadata["size"] == size
     assert sum(observed) == size
     assert max(observed) <= engine.CHUNK_SIZE
@@ -244,6 +244,28 @@ def test_missing_optional_dependency(tmp_path: Path, monkeypatch) -> None:
     assert result.hashes["blake3"].status == "unavailable"
     assert result.hashes["blake3"].value is None
     assert result.hashes["sha256"].value
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows path and handle timestamps")
+def test_windows_path_and_descriptor_version_checks(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from malhash.core._filesystem import same_version
+
+    sample = tmp_path / "timestamps.bin"
+    sample.write_bytes(b"stable")
+    saved = sample.stat()
+    common = {
+        key: getattr(saved, key)
+        for key in ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns")
+    }
+    named = SimpleNamespace(**common, st_birthtime_ns=10, st_ctime_ns=10)
+    opened = SimpleNamespace(**common, st_birthtime_ns=10, st_ctime_ns=20)
+    assert same_version(named, opened, path_to_handle=True)
+    edited = SimpleNamespace(**common, st_birthtime_ns=10, st_ctime_ns=21)
+    assert not same_version(opened, edited)
+    edited.st_size += 1
+    assert not same_version(named, edited, path_to_handle=True)
 
 
 def test_detects_file_changed_after_discovery(tmp_path: Path) -> None:

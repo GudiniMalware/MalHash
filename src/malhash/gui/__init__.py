@@ -1,5 +1,6 @@
 """Launch the optional MalHash desktop interface."""
 
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -7,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 
 def main(argv=None):
-    from PySide6.QtCore import QSettings, QTimer
+    from PySide6.QtCore import QSettings, Qt
     from PySide6.QtWidgets import QApplication
 
     from malhash.gui.window import MainWindow
@@ -25,9 +26,18 @@ def main(argv=None):
         with TemporaryDirectory(dir=staging) as directory:
             settings = QSettings(str(Path(directory) / "settings.ini"), QSettings.Format.IniFormat)
             window = MainWindow(settings, Path(directory) / "history.json")
+            window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen)
             window.show()
-            QTimer.singleShot(100, window.close)
-            return application.exec()
+            sample = Path(directory).resolve() / "sample.txt"
+            payload = b"MalHash desktop release test\n"
+            sample.write_bytes(payload)
+            window.add_paths([sample])
+            window._close_after_scan = True
+            window.start_scan()
+            status = application.exec()
+            if hashlib.sha256(payload).hexdigest() not in window.report.toPlainText().lower():
+                raise RuntimeError("The desktop report did not show the expected SHA-256")
+            return status
     window = MainWindow()
     window.show()
     return application.exec()

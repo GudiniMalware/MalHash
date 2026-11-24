@@ -1,5 +1,5 @@
 include README.ru.md README.es.md SECURITY.md CONTRIBUTING.md CHANGELOG.md
 recursive-include assets *.svg *.png *.ico *.icns
 recursive-include docs *.md *.txt
-recursive-include scripts *.py
+recursive-include scripts *.py *.iss *.spec
 recursive-include tests *.py

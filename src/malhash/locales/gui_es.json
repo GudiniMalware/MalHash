@@ -1,6 +1,7 @@
 {
   "gui.tagline": "Herramienta multiplataforma de cálculo de hashes para analistas de malware y profesionales de DFIR.",
   "gui.settings": "Configuración",
+  "gui.licenses": "Licencias (Qt / LGPL)",
   "gui.sources": "Entradas",
   "gui.add_files": "Añadir archivos",
   "gui.add_folders": "Añadir carpetas",

@@ -1,8 +1,11 @@
 """Appearance and user preferences for the desktop frontend."""
 
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QPalette
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -88,6 +91,15 @@ def choose_preferences(parent, tr, current):
     body.addWidget(hint)
 
     buttons = QHBoxLayout()
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        notices = Path(bundle) / "notices"
+        if (notices / "THIRD_PARTY_NOTICES.md").is_file():
+            licenses = QPushButton(tr("licenses"))
+            licenses.clicked.connect(
+                lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(notices)))
+            )
+            buttons.addWidget(licenses)
     buttons.addStretch()
     cancel = QPushButton(tr("cancel"))
     cancel.clicked.connect(dialog.reject)

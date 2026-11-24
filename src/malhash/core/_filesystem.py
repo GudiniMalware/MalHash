@@ -48,15 +48,21 @@ def same_file(first: os.stat_result, second: os.stat_result) -> bool:
     )
 
 
-def same_version(first: os.stat_result, second: os.stat_result) -> bool:
+def same_version(
+    first: os.stat_result, second: os.stat_result, *, path_to_handle: bool = False
+) -> bool:
+    time_field = "st_ctime_ns"
+    if path_to_handle and os.name == "nt" and hasattr(first, "st_birthtime_ns"):
+        # Windows lstat can report birth time as ctime while fstat reports change time.
+        time_field = "st_birthtime_ns"
     return same_file(first, second) and (
         first.st_size,
         first.st_mtime_ns,
-        first.st_ctime_ns,
+        getattr(first, time_field),
     ) == (
         second.st_size,
         second.st_mtime_ns,
-        second.st_ctime_ns,
+        getattr(second, time_field),
     )
 
 
@@ -229,7 +235,7 @@ def read_file(
             raise FileChanged
         with _file_descriptor(path, directory_fd) as descriptor:
             opened = os.fstat(descriptor)
-            if not same_version(original, opened):
+            if not same_version(original, opened, path_to_handle=True):
                 raise FileChanged
             with open(descriptor, "rb", closefd=False) as stream:
                 yield stream, opened
@@ -243,7 +249,7 @@ def read_file(
                 is_link(current)
                 or is_link(named)
                 or not same_version(opened, os.fstat(descriptor))
-                or not same_version(opened, current)
-                or not same_version(opened, named)
+                or not same_version(original, current)
+                or not same_version(original, named)
             ):
                 raise FileChanged

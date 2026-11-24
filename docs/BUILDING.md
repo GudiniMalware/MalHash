@@ -1,6 +1,8 @@
 # Building and releasing MalHash
 
-Use native CPython 3.11 or newer. Build each target on its own operating system and architecture. Release jobs use CPython 3.12. Building the TLSH dependency on ARM64 requires a C++ toolchain. On macOS this means the Xcode Command Line Tools. On Ubuntu install `build-essential`.
+Use native CPython 3.11 or newer. Build each target on its own operating system and architecture. Release jobs use CPython 3.12. ARM64 builds and builds with Python 3.13 or newer compile the upstream TLSH extension. Install the Visual C++ Build Tools on Windows, the Xcode Command Line Tools on macOS, or `build-essential` on Ubuntu.
+
+Windows GUI builds also require Inno Setup 6.3+ or 7. The build finds `ISCC.exe` on PATH or in a standard installation folder. For a portable compiler, set the `ISCC` environment variable to its full executable path. [Inno Setup downloads](https://jrsoftware.org/inno-setup/downloads)
 
 ```bash
 python -m venv .venv
@@ -12,10 +14,20 @@ python -m pytest --basetemp .pytest-tmp
 python -m build
 python -m twine check --strict dist/*
 python scripts/build_release.py
-python scripts/release_assets.py checksums dist
+python scripts/release_assets.py package dist release
+python scripts/release_assets.py checksums release --archive
 ```
 
-The build script runs the CLI against a synthetic file and starts the GUI using Qt's offscreen platform. These smoke tests launch the packaged programs from an unrelated temporary directory. Pass `--components cli` for a headless build with `.[algorithms,build]` or `--components gui` for only the portable GUI. `--skip-smoke` is available for troubleshooting. Treat its output as unverified until the executable passes a smoke test on the target.
+The build script hashes a synthetic file through the CLI and checks the SHA-256 shown by the GUI after both builds complete. On macOS, PyInstaller uses separate CLI and GUI directories to keep the CLI executable and app bundle distinct on case-insensitive volumes. Windows exercises the native Qt platform with only Windows directories on PATH. Other hosts use the offscreen platform. Pass `--components cli` for a headless build with `.[algorithms,build]` or `--components gui` for a desktop build. `--skip-smoke` is available for troubleshooting.
+
+The Windows build writes the executables to `dist/`. The packaging command places each one at the top level of its own ZIP in `release/`.
+
+| Release download | File to open after extraction | User experience |
+| --- | --- | --- |
+| `MalHash-Windows-x64-Portable.zip` | `MalHash.exe` | Double-click to open the desktop app. The bundled runtime expands into a temporary directory for the session. |
+| `MalHash-Windows-x64-Setup.zip` | `MalHash-Setup.exe` | Install once for the current user, then open MalHash from Start. Windows Settings can uninstall it. The installed runtime stays under `%LOCALAPPDATA%\Programs\MalHash`. |
+
+The Windows smoke test copies the portable EXE into an otherwise empty folder. It also runs the actual installer, starts the installed app, then uninstalls it. The isolated install uses a temporary destination and skips the Start shortcut and Windows app registration.
 
 | Target | CLI | GUI |
 | --- | --- | --- |
@@ -35,12 +47,17 @@ Platform builds embed the release host's native libraries. Validate minimum-plat
 
 ## Release procedure
 
-The GitHub release workflow checks that the version tag agrees with `pyproject.toml`, builds wheel and sdist, builds and smoke-tests native archives, and generates a draft with `SHA256SUMS`. The draft includes matching Qt and Qt for Python source archives plus MalHash's sdist. It does not publish to a package index. Review the asset list, licenses, smoke output and release notes before making the draft public.
+The GitHub release workflow checks the version tag, builds and smoke-tests the applications, and attaches archives to a draft. The downloads include the two Windows ZIPs, the platform bundles, MalHash's source tarball, the wheel inside a `.whl.zip`, and the matching Qt and Qt for Python source tarballs. To install the wheel, extract the ZIP and pass the resulting `.whl` file to `python -m pip install`.
+
+Each build job passes its target to the packager. For example, `python scripts/release_assets.py package dist release --target windows-x64` requires the platform ZIP and both Windows executables. The draft job verifies the downloadable archives against the checksum manifest before uploading them.
+
+Extract `SHA256SUMS.zip` next to the downloaded archives to get `SHA256SUMS`. Its entries hash the downloadable archives themselves. On a system with GNU coreutils, run `sha256sum --check --ignore-missing SHA256SUMS` in that directory. On Windows, compare the output of `Get-FileHash .\MalHash-Windows-x64-Portable.zip -Algorithm SHA256` with the corresponding entry. Review the draft before publishing it.
 
 For an equivalent manual redistribution, keep the exact dependency versions recorded in `BUILD_VERSIONS.md`, collect the Qt source archives, and publish them and the buildable MalHash source alongside the GUI binaries. The Qt download command is a build-time step and needs network access. It downloads the official source tarballs and verifies their upstream SHA-256 values before including them in `SHA256SUMS`.
 
 ```bash
-python scripts/release_assets.py checksums dist --download-qt-source
+python scripts/release_assets.py package dist release
+python scripts/release_assets.py checksums release --archive --download-qt-source --qt-manifests dist
 ```
 
 See [Third-party notices](THIRD_PARTY_NOTICES.md) for Qt replacement and release review details.

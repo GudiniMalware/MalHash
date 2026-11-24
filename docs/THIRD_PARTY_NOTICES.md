@@ -14,14 +14,17 @@ MalHash's original code and artwork are MIT-licensed. Components shipped with fr
 | Qt for Python Essentials and Shiboken, by The Qt Company | [LGPL-3.0 for this distribution](https://doc.qt.io/qtforpython-6/licenses.html). Qt also ships components under their own licenses. Sources and license notices for the bundled Qt version are available as release assets. |
 | PyInstaller bootloader and frozen runtime hooks | [GPL-2.0-or-later with the PyInstaller exception, with some Apache-2.0 files](https://pyinstaller.org/en/stable/license.html) |
 | altgraph | [MIT](https://pypi.org/project/altgraph/) |
+| Windows installer engine | [Inno Setup](https://jrsoftware.org/inno-setup) by Jordan Russell and Martijn Laan. The installed app includes the compiler version's license in its notices folder. |
 
 Build and test tools include [setuptools](https://github.com/pypa/setuptools), [build](https://github.com/pypa/build), [Twine](https://github.com/pypa/twine), [pytest](https://github.com/pytest-dev/pytest), [Ruff](https://github.com/astral-sh/ruff) and the [original ssdeep reference](https://github.com/ssdeep-project/ssdeep). The reference is used only for compatibility tests. It is excluded from frozen applications.
 
 ## Qt source and replacement
 
-The GUI uses Qt as a shared library and distributes the libraries outside its launcher executable. You may replace Qt or PySide with an ABI-compatible modified version and debug your modifications. This distribution does not impose terms against that activity.
+The GUI loads Qt as shared libraries. You may replace Qt or PySide with an ABI-compatible modified version and debug your modifications. On Windows, **Settings → Licenses (Qt / LGPL)** opens the bundled notices, license texts and build versions. You can copy these files while the app is open.
 
-On Windows and Linux, place the replacement libraries and plug-ins in the corresponding paths under the GUI's `_internal` directory. On macOS, replace the corresponding Qt frameworks and libraries under `Contents/Frameworks`, then sign the modified bundle for your target environment. Library and binding versions must remain compatible. A repeatable alternative is to build Qt and PySide from the matching source, install the replacement PySide/Shiboken wheels in the MalHash build environment and rebuild the GUI from MalHash's sdist using `scripts/build_release.py --components gui`.
+In the Windows installation and in Windows and Linux folder builds, replace the libraries and plug-ins under the GUI's `_internal` directory. On macOS, replace the corresponding Qt frameworks and libraries under `Contents/Frameworks`, then sign the modified bundle for your target environment.
+
+The single-file Windows download extracts its runtime on each launch. To build your own `MalHash.exe`, unpack MalHash's source distribution from the same release, follow the build guide to create its Windows environment, then install your ABI-compatible PySide6-Essentials and Shiboken wheels there. Run `python scripts/build_release.py --components gui` to produce a new `dist/MalHash.exe` with your libraries. MalHash's MIT license permits rebuilding and redistributing the application. The release includes matching Qt and PySide source for building modified wheels.
 
 `BUILD_VERSIONS.md` lists the official matching Qt and Qt for Python source URLs for each binary archive. The automated draft also attaches the original verified source archives to the same release as the GUI binaries. See the [build instructions](BUILDING.md) and [Qt open-source distribution guidance](https://www.qt.io/development/open-source-lgpl-obligations).
 
