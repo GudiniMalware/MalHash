@@ -1,0 +1,24 @@
+name: Bug report
+description: Report incorrect behavior or a crash using safe synthetic inputs.
+title: '[Bug] '
+body:
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: MalHash version, operating system, architecture, Python version or native package, and CLI or GUI.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Supply the smallest reproducible case using synthetic data. Remove sensitive paths and hashes.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and observed behavior
+    validations:
+      required: true

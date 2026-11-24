@@ -1,0 +1,66 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  style:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install '.[dev]'
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+        python: ['3.11', '3.14']
+        include:
+          - os: ubuntu-24.04
+            python: '3.12'
+          - os: ubuntu-24.04
+            python: '3.13'
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install Linux Qt dependencies and original ssdeep
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxcb-cursor0 ssdeep
+      - name: Install original ssdeep on macOS
+        if: runner.os == 'macOS'
+        run: brew install ssdeep
+      - name: Install original libfuzzy reference on Windows
+        if: runner.os == 'Windows'
+        run: python -m pip install ssdeep-wheel
+      - name: Test base CLI without Qt
+        run: |
+          python -m pip install '.[dev]'
+          python -c 'import importlib.util; assert importlib.util.find_spec("PySide6") is None'
+          malhash --version
+          malhash LICENSE --algorithms sha256,ssdeep --format json --quiet
+          python -m pytest --basetemp .pytest-tmp
+      - name: Test optional algorithms and GUI
+        run: |
+          python -m pip install '.[all]'
+          python -m pytest --basetemp .pytest-tmp
+          python -m malhash.gui --smoke-test

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">MalHash</title>
+  <rect x="3" y="3" width="58" height="58" rx="14" fill="#111c2c"/>
+  <rect x="3.5" y="3.5" width="57" height="57" rx="13.5" fill="none" stroke="#334e70"/>
+  <g fill="none" stroke="#67aaff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12.8 28.2C13.3 18.4 21.6 11 31.9 11c10.3 0 19 7.9 19.2 17.8.1 6.2-1 11.4-3.5 16.7"/>
+    <path d="M13.5 40.8c3.7-3.4 5.4-7.1 5.6-11.9.3-6.7 5.7-12.1 12.9-12.1 7.4 0 13.2 5.8 13.3 12.3.2 8.3-2 15.7-6.3 21.4"/>
+    <path d="M18.8 47.8c3.7-3.5 5.8-7.6 6.5-13.4"/>
+    <path d="M25.7 28.3a6.4 6.4 0 0 1 4.3-5.2"/>
+    <path d="M25.7 52.1c3.4-3.4 5.3-7.3 6-11.9"/>
+  </g>
+  <path d="m33.3 26-2.5 12.5m8-12.5-2.5 12.5M29.5 30h12m-13 4.6h12" fill="none" stroke="#e1ebff" stroke-width="1.75" stroke-linecap="round"/>
+</svg>

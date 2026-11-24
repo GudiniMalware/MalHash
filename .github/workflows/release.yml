@@ -1,0 +1,111 @@
+name: Draft release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: windows-x64
+          - os: ubuntu-22.04
+            target: linux-x64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+          - os: macos-15
+            target: macos-arm64
+          - os: macos-15-intel
+            target: macos-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install Linux Qt dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxcb-cursor0
+      - run: python -m pip install '.[all,build]' 'PySide6-Essentials==6.11.3'
+      - name: Verify tag
+        run: python scripts/release_assets.py verify-tag
+      - name: Build and smoke-test both applications
+        run: python scripts/build_release.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/malhash-*-${{ matrix.target }}.*
+          if-no-files-found: error
+          compression-level: 0
+
+  distributions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[build]'
+      - run: python scripts/release_assets.py verify-tag
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-python
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+
+  draft:
+    needs: [native, distributions]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+      - name: Collect exact Qt source and calculate checksums
+        run: python scripts/release_assets.py checksums release --download-qt-source
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          assets=(release/*.zip release/*.tar.gz release/*.tar.xz release/*.whl release/SHA256SUMS)
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft'); then
+            if [ "$draft" != 'true' ]; then
+              echo "Release is already published"
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --draft --verify-tag --generate-notes
+          fi
