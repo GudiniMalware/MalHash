@@ -7,7 +7,7 @@
 <p align="center">Cross-platform hashing toolkit for malware analysts and DFIR professionals.</p>
 
 <p align="center">
-  <a href="https://github.com/GudiniMalware/MalHash/releases/latest/download/MalHash-Windows-x64-Portable.zip"><strong>Download MalHash for Windows x64 (portable ZIP)</strong></a>
+  <a href="https://github.com/GudiniMalware/MalHash/releases"><strong>Download MalHash</strong></a>
 </p>
 
 <p align="center">
