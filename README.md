@@ -7,6 +7,10 @@
 <p align="center">Cross-platform hashing toolkit for malware analysts and DFIR professionals.</p>
 
 <p align="center">
+  <a href="https://github.com/GudiniMalware/MalHash/releases/latest/download/MalHash-Windows-x64-Portable.zip"><strong>Download MalHash for Windows x64 (portable ZIP)</strong></a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb?style=flat-square" alt="MIT license"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.11%2B-2563eb?style=flat-square" alt="Python 3.11 or later"></a>
   <a href="SECURITY.md"><img src="https://img.shields.io/badge/runtime-offline-0f766e?style=flat-square" alt="Offline runtime"></a>
@@ -33,6 +37,16 @@ MalHash turns local files and directories into copy-ready malware analysis cards
 </details>
 
 ## Quick start
+
+### Windows desktop
+
+1. Download the portable ZIP, choose **Extract All**, then double-click **MalHash.exe**. Python and Qt are included. [Download the portable ZIP](https://github.com/GudiniMalware/MalHash/releases/latest/download/MalHash-Windows-x64-Portable.zip)
+2. Drag a file or folder into the window and click **Calculate hashes**.
+3. Copy the report or export the results.
+
+For a Start menu shortcut, extract the installer ZIP and run **MalHash-Setup.exe**. It installs for your Windows account and appears in **Settings → Apps**. [Download the installer ZIP](https://github.com/GudiniMalware/MalHash/releases/latest/download/MalHash-Windows-x64-Setup.zip)
+
+### From source
 
 Run these commands from the MalHash source directory.
 
